@@ -6,193 +6,145 @@ import os
 
 import shap
 from lime.lime_tabular import LimeTabularExplainer
-
 import matplotlib.pyplot as plt
 from sklearn.inspection import PartialDependenceDisplay
-from sklearn.exceptions import NotFittedError
 
-# Helper to load models (prefer session_state, fallback to disk)
-def load_model(name, session_key):
-    if session_key in st.session_state:
-        return st.session_state[session_key]
-    model_path = os.path.join("models", name)
-    if os.path.exists(model_path):
-        model = joblib.load(model_path)
-        st.session_state[session_key] = model
-        return model
-    return None
+# ── Shared components ─────────────────────────────────────────────────────────
+from app.components.model_loader import load_model as _load_model_from_disk
+from app.components.utils        import get_label_map, get_X_y
+from app.components.shap_plotter import get_shap_values, shap_global_plot, shap_local_waterfall, shap_compare_rows
+from app.components.lime_plotter import lime_local_explanation
+from app.components.pdp_plotter  import plot_pdp
 
-def ensure_data():
-    if "processed_df" not in st.session_state:
-        st.error("Please run preprocessing first (Upload -> Preprocess).")
-        return None
-    return st.session_state["processed_df"]
+# ── Constants ────────────────────────────────────────────────────────────────
+TARGET_COL = "Approved_Flag"
+MODEL_DIR  = "app/models"
+_LABEL_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
 
-def try_get_Xy(df, target_col="Approved_Flag"):
-    if target_col not in df.columns:
-        st.error(f"Target column '{target_col}' not found in processed data.")
-        return None, None
-    X = df.drop(columns=[target_col])
-    y = df[target_col]
-    return X, y
 
-def show_shap_global(model, X, max_display=20):
-    st.write("### Global SHAP Summary")
-    try:
-        expl = shap.Explainer(model, X)
-        shap_values = expl(X)
-        plt.figure(figsize=(8,6))
-        # shap.summary_plot returns a matplotlib figure when show=False (older/newer versions differ).
-        shap.summary_plot(shap_values, X, show=False, max_display=max_display)
-        st.pyplot(plt.gcf())
-        plt.clf()
-    except Exception as e:
-        st.error(f"Failed to compute global SHAP: {e}")
+# ── Loaders ──────────────────────────────────────────────────────────────────
 
-def show_shap_local(model, X, instance_idx):
-    st.write("### Local SHAP Explanation (Waterfall / Force Plot)")
-    try:
-        expl = shap.Explainer(model, X)
-        shap_values = expl(X)
-        # select instance
-        instance = X.iloc[[instance_idx]]
-        single_shap = shap_values[instance_idx]
-        # Waterfall (matplotlib)
-        try:
-            plt.figure(figsize=(8,4))
-            shap.plots.waterfall(single_shap, show=False)
-            st.pyplot(plt.gcf())
-            plt.clf()
-        except Exception:
-            # fallback to force_plot (may need JS; shap.save_html could be used but here provide textual fallback)
-            try:
-                force_html = shap.plots.force(single_shap, matplotlib=False)
-                st.write("Interactive force plot may not render in this environment.")
-            except Exception as ee:
-                st.error(f"Could not render local SHAP waterfall/force: {ee}")
-    except Exception as e:
-        st.error(f"Failed to compute local SHAP: {e}")
+def _load_model(filename: str, session_key: str):
+    """Thin wrapper — delegates to shared model_loader component."""
+    return _load_model_from_disk(filename, session_key)
 
-def show_lime_local(model, X, y, instance_idx, mode='classification', num_features=10):
-    st.write("### LIME Local Explanation")
-    try:
-        # Prepare numpy arrays for LIME
-        X_np = X.values
-        feature_names = X.columns.tolist()
 
-        # Determine class names if classification
-        class_names = None
-        if mode == "classification":
-            unique_y = np.unique(y)
-            class_names = [str(c) for c in unique_y]
+# ── SHAP helpers — delegated to shap_plotter component ───────────────────────
 
-        explainer = LimeTabularExplainer(
-            X_np,
-            feature_names=feature_names,
-            class_names=class_names,
-            mode=mode,
-            discretize_continuous=True
-        )
+def _get_shap_values(model, X: pd.DataFrame, model_name: str):
+    """Cache key uses model_name to separate train-set SHAP from unseen-set SHAP."""
+    return get_shap_values(model, X, f"train_{model_name}")
 
-        instance = X_np[instance_idx]
-        if mode == "classification":
-            exp = explainer.explain_instance(instance, model.predict_proba, num_features=num_features)
-        else:
-            exp = explainer.explain_instance(instance, model.predict, num_features=num_features)
 
-        # Show LIME explanation as list
-        st.write("LIME explanation (feature contributions):")
-        html = exp.as_html()
-        st.components.v1.html(html, height=400, scrolling=True)
+def _show_shap_global(model, X: pd.DataFrame, model_name: str, max_display: int = 20):
+    st.write("### 🌍 Global SHAP Summary")
+    shap_global_plot(model, X, f"train_{model_name}", max_display)
 
-    except Exception as e:
-        st.error(f"Failed to compute LIME explanation: {e}")
 
-def show_pdp(model, X, features):
-    st.write("### Partial Dependence Plot (PDP)")
-    if not features:
-        st.info("Pick a feature for PDP.")
-        return
-    try:
-        fig, ax = plt.subplots(figsize=(8,4))
-        # sklearn's PartialDependenceDisplay convenience
-        PartialDependenceDisplay.from_estimator(model, X, features=features, ax=ax)
-        st.pyplot(fig)
-        plt.clf()
-    except Exception as e:
-        st.error(f"Failed to compute PDP: {e}")
+def _show_shap_local(model, X: pd.DataFrame, model_name: str, idx: int):
+    st.write(f"### 🔍 SHAP Waterfall — Applicant {idx}")
+    shap_local_waterfall(model, X, f"train_{model_name}", idx)
+
+
+# ── LIME helper — delegated to lime_plotter component ────────────────────────
+
+def _show_lime(model, X: pd.DataFrame, y: pd.Series, idx: int, num_features: int = 12):
+    st.write(f"### 🧩 LIME Local Explanation — Applicant {idx}")
+    lime_local_explanation(model, X, idx, get_label_map(), num_features)
+
+
+# ── PDP helper — delegated to pdp_plotter component ──────────────────────────
+
+def _show_pdp(model, X: pd.DataFrame, feature: str):
+    st.write(f"### 📈 Partial Dependence Plot — `{feature}`")
+    plot_pdp(model, X, feature)
+
+
+# ── Main page ─────────────────────────────────────────────────────────────────
 
 def main():
-    st.title("🔍 Explainability: SHAP, LIME, PDP")
+    st.title("🔍 Explainability — SHAP · LIME · PDP")
 
-    df = ensure_data()
-    if df is None:
-        return
-
-    X, y = try_get_Xy(df)
+    # ── Data ─────────────────────────────────────────────────────────────────
+    X, y = get_X_y()
     if X is None:
         return
 
-    # Load models (prefer session state)
-    st.write("Loading models (session first, then disk)...")
-    lr = load_model("logistic_regression.pkl", "lr_model")
-    ebm = load_model("ebm_model.pkl", "ebm_model")
+    # ── Models ───────────────────────────────────────────────────────────────
+    lr  = _load_model("logistic_regression.pkl", "lr_model")
+    ebm = _load_model("ebm_model.pkl",           "ebm_model")
 
     model_options = {}
     if lr:
-        model_options["LogisticRegression"] = lr
+        model_options["Logistic Regression"] = lr
     if ebm:
         model_options["EBM"] = ebm
 
     if not model_options:
-        st.error("No models found. Train models first (03_Model_Training).")
+        st.error("No trained models found. Run **Train Models** first.")
         return
 
-    model_name = st.selectbox("Choose model for explanations", list(model_options.keys()))
-    model = model_options[model_name]
+    model_name = st.selectbox("Model", list(model_options.keys()))
+    model      = model_options[model_name]
 
-    # try to ensure model is fitted
-    try:
-        # some estimators have `predict` only after fitting; this will raise if not fitted
-        model_predict = getattr(model, "predict", None)
-        if model_predict is None:
-            raise NotFittedError("Model has no predict method.")
-    except Exception as e:
-        st.error(f"Model appears not fitted or invalid: {e}")
-        return
+    # Confirm EBM feature names are real (diagnostic, shown once)
+    if model_name == "EBM":
+        ebm_features = getattr(model, "feature_names_in_", None)
+        if ebm_features is not None:
+            st.caption(
+                f"EBM feature names: {list(ebm_features[:5])} … "
+                f"({len(ebm_features)} total)"
+            )
+        else:
+            st.warning(
+                "EBM `feature_names_in_` is not set — charts may show generic indices. "
+                "Re-train the model on the **Train Models** page."
+            )
 
     st.markdown("---")
-    # Global SHAP
+
+    # ── Section 1: Global SHAP ───────────────────────────────────────────────
+    st.subheader("1 — Global Feature Importance (SHAP)")
+    max_display = st.slider("Features to display", min_value=5, max_value=30, value=20)
     if st.button("Compute Global SHAP Summary"):
-        with st.spinner("Computing global SHAP..."):
-            show_shap_global(model, X)
+        _show_shap_global(model, X, model_name, max_display)
 
     st.markdown("---")
-    # Local explanations — choose instance
-    instance_idx = st.number_input("Select row index for local explanations", min_value=0, max_value=max(0, len(X)-1), value=0, step=1)
 
-    if st.button("Show Local SHAP Explanation"):
-        with st.spinner("Computing local SHAP..."):
-            show_shap_local(model, X, int(instance_idx))
+    # ── Section 2: Local explanations ────────────────────────────────────────
+    st.subheader("2 — Local Explanations (per applicant)")
 
-    if st.button("Show LIME Explanation"):
-        with st.spinner("Computing LIME explanation..."):
-            # LIME requires model.predict_proba for classification
-            mode = "classification"
-            # detect if model has predict_proba; if not, use predict (regression or surrogate)
-            if hasattr(model, "predict_proba"):
-                mode = "classification"
-            else:
-                mode = "regression"
-            show_lime_local(model, X, y, int(instance_idx), mode=mode)
+    idx = st.number_input(
+        "Applicant row index",
+        min_value=0,
+        max_value=max(0, len(X) - 1),
+        value=0,
+        step=1,
+    )
+
+    col_shap, col_lime = st.columns(2)
+    with col_shap:
+        if st.button("Show SHAP Waterfall"):
+            _show_shap_local(model, X, model_name, int(idx))
+    with col_lime:
+        if st.button("Show LIME Explanation"):
+            _show_lime(model, X, y, int(idx))
 
     st.markdown("---")
-    # PDP
-    st.write("Partial Dependence Plots")
-    feature_for_pdp = st.selectbox("Choose feature for PDP", X.columns.tolist())
+
+    # ── Section 3: PDP ───────────────────────────────────────────────────────
+    st.subheader("3 — Partial Dependence Plot")
+
+    # Group features for easier navigation: numeric first, then OHE-expanded
+    all_features = X.columns.tolist()
+    feature_for_pdp = st.selectbox("Feature", all_features)
+
     if st.button("Show PDP"):
-        with st.spinner("Computing PDP..."):
-            show_pdp(model, X, [feature_for_pdp])
+        _show_pdp(model, X, feature_for_pdp)
+
+    st.markdown("---")
+    st.info("➡ Proceed to **Score New Applicants** or **Fairness Audit**.")
+
 
 if __name__ == "__main__":
     main()
