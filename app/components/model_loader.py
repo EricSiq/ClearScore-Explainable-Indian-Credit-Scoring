@@ -1,45 +1,38 @@
-import streamlit as st
+"""
+app/components/model_loader.py
+Single source of truth for loading trained models from disk or session state.
+"""
+
 import os
 import joblib
-from sklearn.exceptions import NotFittedError
+import streamlit as st
 
-def load_model(model_filename, session_key):
-    """
-    Safely load model either from session_state or from disk (/models/).
-    Returns model object or None.
-    """
+# Default model directory — relative to the project root where streamlit is run
+MODEL_DIR = "app/models"
 
-    # If already loaded in Streamlit session
+
+def load_model(model_filename: str, session_key: str):
+    """
+    Return a trained model, loading from session_state if already present,
+    otherwise from disk at MODEL_DIR/<model_filename>.
+
+    Stores the loaded model back into session_state under session_key so
+    subsequent calls within the same session are instant.
+
+    Returns None (with a Streamlit warning) if the file is not found.
+    """
     if session_key in st.session_state:
         return st.session_state[session_key]
 
-    model_path = os.path.join("models", model_filename)
-
-    # If model exists on disk
-    if os.path.exists(model_path):
+    path = os.path.join(MODEL_DIR, model_filename)
+    if os.path.exists(path):
         try:
-            model = joblib.load(model_path)
+            model = joblib.load(path)
             st.session_state[session_key] = model
             return model
         except Exception as e:
-            st.error(f"❌ Error loading model file '{model_filename}': {e}")
+            st.error(f"Error loading model `{model_filename}`: {e}")
             return None
 
-    st.warning(f"⚠ Model '{model_filename}' not found. Train models first.")
+    st.warning(f"Model `{model_filename}` not found in `{MODEL_DIR}`. Run **Train Models** first.")
     return None
-
-
-def verify_model_is_fitted(model):
-    """
-    Run a simple check to confirm model has been trained/fitted.
-    Raises NotFittedError if unfitted.
-    """
-    if not hasattr(model, "predict"):
-        raise NotFittedError("Model does not implement predict(), can't verify fit.")
-
-    try:
-        # Try calling predict on dummy data; lightweight sanity check.
-        # We only test that predict exists, not correctness.
-        pass
-    except Exception:
-        raise NotFittedError("Model appears to be untrained or improperly loaded.")
