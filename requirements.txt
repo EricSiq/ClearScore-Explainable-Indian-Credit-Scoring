@@ -1,11 +1,41 @@
-streamlit
-pandas
-numpy
-scikit-learn
-interpret
-lime
-shap
-matplotlib
-seaborn
-joblib
-aif360
+# ── Core dashboard ────────────────────────────────────────────────────────────
+streamlit==1.56.0
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+pandas==2.3.3
+numpy==2.3.5
+openpyxl==3.1.5          # required for pd.read_excel / pd.to_excel
+
+# ── Machine learning ──────────────────────────────────────────────────────────
+scikit-learn==1.8.0
+joblib==1.5.3
+
+# ── Explainable models ────────────────────────────────────────────────────────
+interpret==0.7.8          # ExplainableBoostingClassifier (EBM)
+
+# ── Post-hoc explainability ───────────────────────────────────────────────────
+shap==0.51.0
+lime==0.2.0.1
+
+# ── Visualisation ─────────────────────────────────────────────────────────────
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# ── PDF export ────────────────────────────────────────────────────────────────
+reportlab==4.4.10
+
+# ── Agent (optional — only needed for LLM-backed responses on Page 7) ─────────
+# openai==2.31.0
+# The agent works fully without this package (template fallback mode).
+# Uncomment and install if you want LLM-backed natural language responses.
+# The llama-cli binary (llama.cpp) is used instead of the OpenAI SDK by default.
+# Download from: https://github.com/ggerganov/llama.cpp/releases
+
+# ── Intentionally omitted ─────────────────────────────────────────────────────
+# fairlearn  — scipy build fails on Python 3.14 / Windows (no Fortran compiler).
+#              Fairness metrics implemented natively in app/6_Fairness_Audit.py.
+#              See DECISIONS.md ADR-002.
+# aif360     — broken install, replaced by native implementation.
+# llama-cpp-python — requires cmake + C++ compiler. The agent calls the
+#              llama-cli binary directly via subprocess instead.
+#              See DECISIONS.md ADR-004.
