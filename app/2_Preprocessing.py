@@ -98,12 +98,33 @@ def run_preprocessing(df: pd.DataFrame):
 def main():
     st.title("Preprocessing & Feature Engineering")
 
+    # Auto-run if demo mode was triggered from Home page
+    demo_mode = st.session_state.get("demo_mode", False)
+
     if "internal_df" not in st.session_state or "external_df" not in st.session_state:
-        st.error("Upload both datasets first on the Upload Data page.")
+        st.error(
+            "No datasets found. Return to **Home** and click Launch Demo, "
+            "or upload datasets on the **Upload Data** page."
+        )
         return
 
     df_int = st.session_state["internal_df"]
     df_ext = st.session_state["external_df"]
+
+    # Pipeline description
+    with st.expander("What this step does"):
+        st.markdown(
+            "**Merge** — inner join on shared key `PROSPECTID` "
+            "(51,336 matching rows across both datasets)\n\n"
+            "**Impute** — numeric columns: median strategy; "
+            "categorical columns: most-frequent strategy\n\n"
+            "**Encode** — OneHotEncoder on 5 categorical columns "
+            "(MARITALSTATUS, EDUCATION, GENDER, last_prod_enq2, first_prod_enq2) "
+            "producing 23 binary columns\n\n"
+            "**Scale** — StandardScaler on all 80 numeric columns "
+            "(zero mean, unit variance)\n\n"
+            "**Label encode target** — Approved_Flag: P1→0, P2→1, P3→2, P4→3"
+        )
 
     st.subheader("Step 1 — Merge Datasets")
     with st.spinner("Merging datasets..."):
@@ -114,7 +135,13 @@ def main():
 
     st.subheader("Step 2 — Encode, Impute & Scale")
 
-    if st.button("Run Preprocessing"):
+    # In demo mode, auto-run preprocessing without requiring button click
+    auto_run = demo_mode and "processed_df" not in st.session_state
+    run_button = st.button("Run Preprocessing")
+
+    if run_button or auto_run:
+        if auto_run:
+            st.info("Demo mode: running preprocessing automatically...")
         with st.spinner("Running preprocessing pipeline..."):
             try:
                 X_processed, y, feature_names, preprocessor = run_preprocessing(df_merged)

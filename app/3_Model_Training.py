@@ -129,9 +129,12 @@ def _plot_class_dist_comparison(y_train: pd.Series, y_test: pd.Series, label_map
 
 def _show_metrics(metrics: dict, model_name: str, label_map: dict):
     col1, col2, col3 = st.columns(3)
-    col1.metric("Macro F1",    f"{metrics['f1_macro']:.3f}")
-    col2.metric("Weighted F1", f"{metrics['f1_weighted']:.3f}")
-    col3.metric("AUC (OvR)",   f"{metrics['auc_ovr']:.3f}")
+    col1.metric("Macro F1",    f"{metrics['f1_macro']:.3f}",
+                help="Unweighted average F1 across P1, P2, P3, P4. Best choice for imbalanced classes — treats all four tiers equally regardless of size.")
+    col2.metric("Weighted F1", f"{metrics['f1_weighted']:.3f}",
+                help="F1 weighted by class support. Reflects real-world performance accounting for the fact that P2 (62.7% of applicants) dominates the portfolio.")
+    col3.metric("AUC (OvR)",   f"{metrics['auc_ovr']:.3f}",
+                help="One-vs-Rest ROC AUC macro-averaged across all 4 tiers. Measures the model's ability to rank applicants correctly — 1.0 = perfect separation, 0.5 = random.")
 
     report_df = pd.DataFrame(metrics["classification_report"]).T
     keep_rows = [label_map[i] for i in sorted(label_map)] + ["macro avg", "weighted avg"]
@@ -154,9 +157,13 @@ def _show_metrics(metrics: dict, model_name: str, label_map: dict):
 
 def main():
     st.title("Train Models")
+    st.caption("CreditLens · Explainable AI Credit Scoring")
 
     if "processed_df" not in st.session_state:
-        st.error("Run Preprocessing first.")
+        st.error(
+            "No preprocessed data found. "
+            "Run the full pipeline: **Home > Launch Demo** (or Upload Data > Preprocess) > then return here."
+        )
         return
 
     df = st.session_state["processed_df"]
@@ -173,17 +180,75 @@ def main():
     st.subheader("Dataset Overview")
     col1, col2, col3 = st.columns(3)
     col1.metric("Total samples", f"{len(df):,}")
-    col2.metric("Features", len(feature_names))
-    col3.metric("Classes", y.nunique())
+    col2.metric("Features", len(feature_names),
+                help="80 numeric + 23 OHE-expanded categorical = 103 total after preprocessing")
+    col3.metric("Classes", y.nunique(),
+                help="P1 (Excellent), P2 (Good), P3 (Marginal), P4 (Poor)")
     with st.expander("Full class distribution"):
         st.table(_class_dist_df(y, label_map))
+
+    # Model configuration transparency
+    with st.expander("Model configuration"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Logistic Regression (baseline)**")
+            st.code(
+                "solver='lbfgs'         # efficient for multinomial, handles L2\n"
+                "max_iter=1000          # sufficient for 103-feature OHE input\n"
+                "multi_class=multinomial # automatic in sklearn 1.5+ with lbfgs\n"
+                "random_state=42",
+                language="python"
+            )
+        with c2:
+            st.markdown("**EBM — Explainable Boosting Machine (primary)**")
+            st.code(
+                "# InterpretML ExplainableBoostingClassifier\n"
+                "random_state=42\n"
+                "# Pairwise interactions auto-detected\n"
+                "# Shape functions learned per feature\n"
+                "# Explanations exact (not post-hoc SHAP)",
+                language="python"
+            )
+        st.caption(
+            "Train/test split: 80/20, stratified by class to preserve P1–P4 proportions. "
+            "Stratification ensures the 11.3% P1 minority class is represented in both splits."
+        )
+
+    # Sample size selector — keeps memory within Streamlit Cloud free tier (1 GB RAM)
+    st.subheader("Training Configuration")
+    sample_pct = st.select_slider(
+        "Training sample size",
+        options=[10, 25, 50, 75, 100],
+        value=100,
+        format_func=lambda x: f"{x}%  ({int(len(df) * x / 100):,} rows)",
+        help=(
+            "Use 100% for full accuracy. "
+            "Reduce to 25-50% if running on Streamlit Cloud free tier (1 GB RAM limit). "
+            "EBM on 51K rows requires ~800 MB."
+        ),
+    )
+    if sample_pct < 100:
+        n_sample = int(len(df) * sample_pct / 100)
+        st.info(
+            f"Training on {n_sample:,} rows ({sample_pct}% sample, stratified). "
+            "Metrics will be slightly lower than full-dataset results."
+        )
 
     st.markdown("---")
 
     if st.button("Train Models"):
+        # Apply sample if requested
+        if sample_pct < 100:
+            n_sample = int(len(df) * sample_pct / 100)
+            X_s, _, y_s, _ = train_test_split(
+                X, y, train_size=n_sample, random_state=42, stratify=y
+            )
+        else:
+            X_s, y_s = X, y
+
         with st.spinner("Splitting data (80/20 stratified)..."):
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42, stratify=y)
+                X_s, y_s, test_size=0.2, random_state=42, stratify=y_s)
 
         st.subheader("Train / Test Split")
         s1, s2 = st.columns(2)
@@ -256,6 +321,29 @@ def main():
         st.dataframe(comparison.style.highlight_max(axis=0, color="#d4edda"),
                      use_container_width=True)
         st.caption("Green cells = better model for that metric.")
+
+        # Recommendation based on live results
+        ebm_f1  = ebm_metrics["f1_macro"]
+        lr_f1   = lr_metrics["f1_macro"]
+        ebm_auc = ebm_metrics["auc_ovr"]
+        lr_auc  = lr_metrics["auc_ovr"]
+        if ebm_f1 > lr_f1 and ebm_auc > lr_auc:
+            st.success(
+                f"**Recommended model: EBM.** "
+                f"Outperforms Logistic Regression on both Macro F1 "
+                f"({ebm_f1:.3f} vs {lr_f1:.3f}) and AUC "
+                f"({ebm_auc:.3f} vs {lr_auc:.3f}). "
+                "EBM is also the correct choice for regulatory compliance — "
+                "its shape functions provide exact, auditable explanations that satisfy "
+                "RBI MRM documentation requirements without post-hoc approximation."
+            )
+        elif lr_f1 >= ebm_f1:
+            st.info(
+                "Logistic Regression matches or exceeds EBM on this sample size. "
+                "Try 100% training data for a more representative comparison — "
+                "EBM typically outperforms LR on the full 51K dataset."
+            )
+
         st.info("Proceed to Explainability to inspect SHAP, LIME, and PDP.")
 
 

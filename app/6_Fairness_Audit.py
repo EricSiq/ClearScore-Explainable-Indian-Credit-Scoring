@@ -185,7 +185,7 @@ def _generate_narrative(attr: str, sr: pd.Series, dpd: float, eod: float, label_
 
 def main():
     st.title("Fairness Audit")
-    st.caption("Demographic fairness analysis. Thresholds aligned with RBI Model Risk Management Guidelines (2023).")
+    st.caption("CreditLens · Demographic fairness analysis · RBI MRM Guidelines (2023)")
 
     with st.expander("Threshold reference"):
         col1, col2, col3 = st.columns(3)
@@ -276,6 +276,45 @@ def main():
     st.markdown("---")
     st.subheader("5 — Narrative Summary")
     st.markdown(_generate_narrative(attr, sr, dpd, eod, label_map))
+
+    # ── Action panel — shown only when thresholds are breached ────────────────
+    if dpd >= THRESHOLD_AMBER or eod >= THRESHOLD_AMBER:
+        st.markdown("---")
+        st.subheader("Mitigation Options")
+        st.caption(
+            "One or more metrics exceed the RBI MRM monitoring threshold. "
+            "The following mitigation strategies are standard practice for regulated credit models."
+        )
+        with st.expander("Option 1 — Post-processing: group-specific thresholds (no retraining)"):
+            st.markdown(
+                "Set different approval probability thresholds per demographic group "
+                "to equalize TPR and FPR.\n\n"
+                "**Pros:** No retraining. Immediate effect. Fully auditable.\n\n"
+                "**Cons:** Slightly lower overall accuracy (typically 1–2%). "
+                "Requires justification in model documentation.\n\n"
+                "**Tool:** `fairlearn.postprocessing.ThresholdOptimizer` "
+                "(when scipy build issues are resolved in the environment)."
+            )
+        with st.expander("Option 2 — Reweighting: upsample minority group (retraining required)"):
+            st.markdown(
+                "Assign higher training weights to underrepresented demographic groups "
+                "so the model learns more balanced error rates.\n\n"
+                "**Pros:** Addresses the root cause in the model itself.\n\n"
+                "**Cons:** Requires full retraining. May reduce accuracy on majority group.\n\n"
+                "**Implementation:** `sklearn.utils.class_weight.compute_sample_weight` "
+                "with sensitive attribute as the class label."
+            )
+        with st.expander("Option 3 — Feature audit: check for proxy discrimination"):
+            st.markdown(
+                f"If `{attr}` is correlated with features the model uses directly, "
+                "removing or transforming those features may reduce bias without "
+                "explicitly using demographic information.\n\n"
+                "**For EDUCATION specifically:** `EDUCATION` correlates with `NETMONTHLYINCOME`. "
+                "If income is a direct model feature, education-level bias may be a proxy effect "
+                "rather than the model directly discriminating.\n\n"
+                "**RBI requirement:** Document the root cause analysis and chosen mitigation "
+                "strategy in the Model Risk Management register before deployment."
+            )
 
     st.markdown("---")
     st.subheader("6 — All Attributes Overview")

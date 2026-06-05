@@ -14,7 +14,31 @@ def load_excel_or_csv(upload):
 
 def main():
     st.title("Upload Datasets")
-    st.write("Upload the internal bank dataset and external CIBIL dataset to begin.")
+    st.caption("Upload the internal bank trade-line data and external CIBIL bureau data.")
+
+    # Schema reference
+    with st.expander("Expected dataset schemas"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Internal Bank Dataset** (26 columns)")
+            st.markdown(
+                "Key columns: `PROSPECTID`, `Total_TL`, `Tot_Missed_Pmnt`, "
+                "`CC_TL`, `Home_TL`, `PL_TL`, `Age_Oldest_TL`, `Age_Newest_TL`, "
+                "and percentage-based trade-line metrics.\n\n"
+                "Merge key: **PROSPECTID**"
+            )
+        with col2:
+            st.markdown("**External CIBIL Dataset** (62 columns)")
+            st.markdown(
+                "Key columns: `PROSPECTID`, `num_times_delinquent`, `CC_utilization`, "
+                "`GENDER`, `EDUCATION`, `MARITALSTATUS`, `AGE`, `NETMONTHLYINCOME`, "
+                "`Credit_Score`, **`Approved_Flag`** (target: P1/P2/P3/P4).\n\n"
+                "Merge key: **PROSPECTID**"
+            )
+        st.caption(
+            "Using the bundled sample datasets? Return to Home and click Launch Demo "
+            "to skip this page entirely."
+        )
 
     internal_file = st.file_uploader(
         "Internal Bank Dataset (.xlsx or .csv)", type=["xlsx", "csv"]

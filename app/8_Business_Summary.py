@@ -204,7 +204,7 @@ def _build_pdf(bm_lr, bm_ebm, lr_meta, ebm_meta, avg_loan, p4_rate, p3_rate) -> 
 
 def main():
     st.title("Business Impact Summary")
-    st.caption("Model performance translated into credit risk business language.")
+    st.caption("CreditLens · Model performance in credit risk business language")
 
     metrics = _get_metrics()
     if metrics is None:
@@ -222,6 +222,17 @@ def main():
 
     st.subheader("Assumptions")
     st.caption("Adjust to match your portfolio.")
+    with st.expander("Where these defaults come from"):
+        st.markdown(
+            "- **P4 default rate 40%**: Conservative estimate for subprime unsecured personal "
+            "loans in India. CRISIL data and RBI Financial Stability Reports (2022–2024) show "
+            "30–50% historical NPA roll-rates for this segment.\n"
+            "- **P3 default rate 15%**: Sub-standard (watch-list) loans show 10–20% roll-rate "
+            "to NPA. P3 applicants are offered conditional approval (higher rate, lower limit) "
+            "which partially mitigates this risk.\n"
+            "- **Average loan Rs 2L**: Median unsecured personal loan ticket size for mid-market "
+            "NBFCs and digital lenders in India (2023–2024 RBI data)."
+        )
     col1, col2, col3 = st.columns(3)
     avg_loan = col1.slider("Average loan size (Rs)", min_value=50_000, max_value=1_000_000,
                            value=DEFAULT_AVG_LOAN, step=50_000)
@@ -234,6 +245,31 @@ def main():
 
     bm_lr  = _compute_business_metrics(lr_meta["confusion_matrix"],  lr_meta["y_pred"],  n_test, avg_loan, p4_rate, p3_rate)
     bm_ebm = _compute_business_metrics(ebm_meta["confusion_matrix"], ebm_meta["y_pred"], n_test, avg_loan, p4_rate, p3_rate)
+
+    # ── Model recommendation ──────────────────────────────────────────────────
+    ebm_wins = sum([
+        bm_ebm["accuracy"]     > bm_lr["accuracy"],
+        bm_ebm["npa_total"]    >= bm_lr["npa_total"],
+        bm_ebm["npa_exposure"] <= bm_lr["npa_exposure"],
+        ebm_meta["f1_macro"]   > lr_meta["f1_macro"],
+        ebm_meta["auc_ovr"]    > lr_meta["auc_ovr"],
+    ])
+    if ebm_wins >= 4:
+        st.success(
+            f"**Recommended model: EBM.** "
+            f"Outperforms Logistic Regression on {ebm_wins}/5 business metrics — "
+            f"accuracy ({bm_ebm['accuracy']:.1%} vs {bm_lr['accuracy']:.1%}), "
+            f"NPA avoided ({_fmt_cr(bm_ebm['npa_total'])} vs {_fmt_cr(bm_lr['npa_total'])}), "
+            f"and AUC ({ebm_meta['auc_ovr']:.3f} vs {lr_meta['auc_ovr']:.3f}). "
+            f"EBM is also preferred for regulatory compliance — its shape functions provide "
+            f"exact, auditable explanations that satisfy RBI MRM documentation requirements "
+            f"without relying on post-hoc SHAP approximations."
+        )
+    else:
+        st.info(
+            f"**Models are comparable** on this sample. "
+            f"EBM won {ebm_wins}/5 metrics. Consider full 100% training set for a definitive comparison."
+        )
 
     st.subheader("1 — EBM Model: Headline Outcomes")
     st.caption(f"Based on {n_test:,} test-set applicants (20% holdout, stratified)")

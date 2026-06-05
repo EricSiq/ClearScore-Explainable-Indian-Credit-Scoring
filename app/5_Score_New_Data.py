@@ -166,6 +166,7 @@ def _shap_top_features(shap_values, idx: int, n: int = 10) -> list:
 
 def main():
     st.title("Score New Applicants")
+    st.caption("CreditLens · Explainable AI Credit Scoring")
     label_map = _label_map()
 
     st.subheader("1 — Load Unseen Dataset")

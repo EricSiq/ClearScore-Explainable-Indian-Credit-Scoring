@@ -352,7 +352,50 @@ def _dispatch(intent, args, model, model_key, X, y, label_map, model_path, metri
 
 def main():
     st.title("Credit Analyst Agent")
-    st.caption("Ask questions in plain English. Answers are grounded in SHAP feature contributions.")
+    st.caption("Ask questions in plain English. Responses are grounded in SHAP feature attributions from the trained model.")
+
+    # ── Example conversation shown on first load ──────────────────────────────
+    with st.expander("See example conversation — what this agent can do", expanded=True):
+        st.markdown(
+            "**User:** explain applicant 42\n\n"
+            "**Agent:** Applicant 42 was classified as **P4** (poor creditworthiness) "
+            "with 87% confidence. The three strongest negative factors were:\n"
+            "- `num_times_delinquent`: 4 occurrences — the single strongest predictor of credit risk\n"
+            "- `CC_utilization`: 91% — sustained high utilization signals financial stress\n"
+            "- `Tot_Missed_Pmnt`: 6 — persistent payment failures across trade lines\n\n"
+            "**RECOMMENDATION:** To improve from P4 to P3, the applicant needs zero new "
+            "delinquencies for 12 months and CC utilization reduced below 60%.\n\n"
+            "---\n\n"
+            "**User:** fairness for GENDER\n\n"
+            "**Agent:** Approval rates — M: 76.3%, F: 77.3%. "
+            "Demographic Parity Difference: 0.0105 (**Acceptable** — below RBI threshold of 0.05). "
+            "The model does not disadvantage female applicants on approval rate. "
+            "Equalized Odds Difference: 0.0500 (**Monitor**) — female applicants have a slightly "
+            "higher false positive rate (16.0% vs 10.9%). This means more non-creditworthy female "
+            "applicants are incorrectly approved. Warrants monitoring but no immediate mitigation required.\n\n"
+            "---\n\n"
+            "**User:** what features drive approvals?\n\n"
+            "**Agent:** The top predictors (by mean |SHAP| across all applicants) are: "
+            "`num_times_delinquent`, `CC_utilization`, `Tot_Missed_Pmnt`, `time_since_recent_deliquency`, "
+            "`pct_active_tl`. Delinquency-related features dominate — consistent with "
+            "standard credit risk theory. `CC_utilization` captures current financial stress. "
+            "`pct_active_tl` (fraction of trade lines still active) reflects credit portfolio health."
+        )
+
+    # ── Quick query buttons ───────────────────────────────────────────────────
+    st.markdown("**Quick queries** (click to send):")
+    qcol1, qcol2, qcol3 = st.columns(3)
+    if qcol1.button("Explain applicant 0", use_container_width=True):
+        st.session_state["_prefill_query"] = "explain applicant 0"
+        st.rerun()
+    if qcol2.button("What features drive approvals?", use_container_width=True):
+        st.session_state["_prefill_query"] = "what features drive approvals?"
+        st.rerun()
+    if qcol3.button("Fairness for EDUCATION", use_container_width=True):
+        st.session_state["_prefill_query"] = "fairness for EDUCATION"
+        st.rerun()
+
+    st.markdown("---")
 
     with st.sidebar:
         st.markdown("### SLM Configuration")
@@ -392,20 +435,27 @@ def main():
             st.info("Template mode (no SLM)")
             st.caption("Structured template responses with real SHAP numbers.")
 
-    X, y = _get_X_y()
+    X, y = get_X_y()
     if X is None:
-        st.error("Run Preprocessing and Train Models first.")
+        st.error(
+            "No preprocessed data found. "
+            "Run the full pipeline: **Home > Launch Demo** (or Upload Data > Preprocess > Train Models) > then return here."
+        )
         return
 
     lr  = _load_model("logistic_regression.pkl", "lr_model")
     ebm = _load_model("ebm_model.pkl",           "ebm_model")
+
     model_options = {}
     if lr:
         model_options["Logistic Regression"] = ("lr",  lr)
     if ebm:
         model_options["EBM"]                 = ("ebm", ebm)
     if not model_options:
-        st.error("No trained models found. Run Train Models first.")
+        st.error(
+            "No trained models found. "
+            "Run **3 · Train Models** first, then return here."
+        )
         return
 
     model_display_key = st.selectbox("Model", list(model_options.keys()), key="agent_model_select")
@@ -425,7 +475,10 @@ def main():
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if query := st.chat_input("Ask about an applicant, feature importance, or fairness..."):
+    # Handle prefill from quick-query buttons
+    prefill = st.session_state.pop("_prefill_query", None)
+
+    if query := (prefill or st.chat_input("Ask about an applicant, feature importance, or fairness...")):
         with st.chat_message("user"):
             st.markdown(query)
         st.session_state["chat_history"].append({"role": "user", "content": query})
