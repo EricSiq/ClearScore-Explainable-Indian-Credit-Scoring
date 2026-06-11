@@ -223,22 +223,39 @@ def main():
     sample_pct = st.select_slider(
         "Training sample size",
         options=[10, 25, 50, 75, 100],
-        value=100,
+        value=25,
         format_func=lambda x: f"{x}%  ({int(len(df) * x / 100):,} rows)",
         help=(
-            "Use 100% for full accuracy. "
-            "Reduce to 25-50% if running on Streamlit Cloud free tier (1 GB RAM limit). "
-            "EBM on 51K rows requires ~800 MB."
+            "Streamlit Cloud free tier has 1 GB RAM. "
+            "EBM on the full 51K rows requires ~800 MB and will crash the app. "
+            "25% (12,800 rows) trains in ~30 seconds and achieves strong metrics. "
+            "Use 100% only if running locally with sufficient RAM."
         ),
     )
-    if sample_pct < 100:
-        n_sample = int(len(df) * sample_pct / 100)
+    if sample_pct <= 25:
         st.info(
-            f"Training on {n_sample:,} rows ({sample_pct}% sample, stratified). "
-            "Metrics will be slightly lower than full-dataset results."
+            f"Training on {int(len(df) * sample_pct / 100):,} rows ({sample_pct}% sample, stratified). "
+            "Recommended for Streamlit Cloud. Metrics are slightly lower than the full-dataset results "
+            "shown on the Home page."
+        )
+    elif sample_pct == 100:
+        st.warning(
+            "Training on the full 51,336 rows. "
+            "This requires ~800 MB RAM. "
+            "If the app crashes, reduce to 25% and retrain."
         )
 
     st.markdown("---")
+
+    # Detect Streamlit Cloud environment and enforce safe sample size
+    _on_cloud = os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("HOME", "").startswith("/home/adminuser")
+    if _on_cloud and sample_pct > 50:
+        st.error(
+            "This app is running on Streamlit Cloud (1 GB RAM). "
+            "Training EBM on more than 50% of the data will cause an out-of-memory crash. "
+            "**Set the sample size to 25% or 50% before training.**"
+        )
+        return
 
     if st.button("Train Models"):
         # Apply sample if requested
@@ -273,7 +290,15 @@ def main():
 
         with st.spinner("Training Explainable Boosting Machine (~2-3 min on full data)..."):
             try:
-                ebm_model = ExplainableBoostingClassifier(random_state=42)
+                # interactions=0 disables pairwise interaction detection.
+                # For multiclass EBM, pairs are stripped from visualizations anyway
+                # (InterpretML limitation) and computing them wastes ~200 MB of RAM.
+                # Setting interactions=0 makes training faster and more memory-efficient
+                # with no loss of explanation quality for the 4-class credit tier task.
+                ebm_model = ExplainableBoostingClassifier(
+                    interactions=0,
+                    random_state=42,
+                )
                 ebm_model.fit(X_train, y_train)
             except MemoryError:
                 st.error(
