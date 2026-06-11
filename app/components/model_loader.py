@@ -1,38 +1,51 @@
 """
 app/components/model_loader.py
 Single source of truth for loading trained models from disk or session state.
+
+Model directory resolution:
+  - Streamlit Cloud: repo filesystem is read-only, so models are saved to /tmp.
+  - Local dev: models saved to app/models/ (writable).
+  The training page (3_Model_Training.py) uses the same logic to determine
+  where to write, so this loader will always look in the same place.
 """
 
 import os
+import tempfile
 import joblib
 import streamlit as st
 
-# Default model directory — relative to the project root where streamlit is run
-MODEL_DIR = "app/models"
+# Mirror the same directory logic used when saving models in Page 3
+_TMP_MODELS = os.path.join(tempfile.gettempdir(), "creditlens_models")
+MODEL_DIR   = _TMP_MODELS if not os.access("app/models", os.W_OK) else "app/models"
 
 
 def load_model(model_filename: str, session_key: str):
     """
-    Return a trained model, loading from session_state if already present,
-    otherwise from disk at MODEL_DIR/<model_filename>.
-
-    Stores the loaded model back into session_state under session_key so
-    subsequent calls within the same session are instant.
-
-    Returns None (with a Streamlit warning) if the file is not found.
+    Return a trained model from session_state (fast path) or disk (cold path).
+    Checks both the resolved MODEL_DIR and the fallback /tmp directory.
     """
     if session_key in st.session_state:
         return st.session_state[session_key]
 
-    path = os.path.join(MODEL_DIR, model_filename)
-    if os.path.exists(path):
-        try:
-            model = joblib.load(path)
-            st.session_state[session_key] = model
-            return model
-        except Exception as e:
-            st.error(f"Error loading model `{model_filename}`: {e}")
-            return None
+    # Try resolved MODEL_DIR first, then the other location as fallback
+    candidates = [
+        os.path.join(MODEL_DIR, model_filename),
+        os.path.join(_TMP_MODELS, model_filename),
+        os.path.join("app/models", model_filename),
+    ]
 
-    st.warning(f"Model `{model_filename}` not found in `{MODEL_DIR}`. Run **Train Models** first.")
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                model = joblib.load(path)
+                st.session_state[session_key] = model
+                return model
+            except Exception as e:
+                st.error(f"Error loading model `{model_filename}` from `{path}`: {e}")
+                return None
+
+    st.warning(
+        f"Model `{model_filename}` not found. "
+        "Run **3 · Train Models** first — models are stored in memory for the current session."
+    )
     return None
