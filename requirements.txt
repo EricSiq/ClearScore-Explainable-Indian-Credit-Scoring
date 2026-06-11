@@ -1,29 +1,15 @@
 # CreditLens — Explainable AI Credit Scoring
-# Unpinned to allow Streamlit Cloud to resolve compatible versions.
-# Tested on Python 3.12 and 3.14.
+# Versions matched to Streamlit Cloud Python 3.14.5 environment (2026-06-11)
 
-# Core dashboard
-streamlit>=1.35.0
-
-# Data
+streamlit>=1.56.0
 pandas>=2.0.0
-numpy>=1.24.0
+numpy>=2.0.0
 openpyxl>=3.1.0
-
-# Machine learning
 scikit-learn>=1.3.0
 joblib>=1.3.0
-
-# Explainable models
 interpret>=0.4.0
-
-# Post-hoc explainability
 shap>=0.43.0
 lime>=0.2.0.1
-
-# Visualisation
 matplotlib>=3.7.0
 seaborn>=0.12.0
-
-# PDF export
 reportlab>=3.6.0
