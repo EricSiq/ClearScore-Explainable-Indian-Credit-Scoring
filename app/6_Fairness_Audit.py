@@ -261,8 +261,7 @@ def main():
     fig_hm = _plot_per_class_heatmap(pcr, attr)
     st.pyplot(fig_hm); plt.close(fig_hm)
     with st.expander("Raw values"):
-        st.dataframe(pcr.style.format("{:.1%}").background_gradient(cmap="YlOrRd", axis=None),
-                     use_container_width=True)
+        st.dataframe(pcr.round(3), use_container_width=True)
 
     st.markdown("---")
     st.subheader(f"4 — Error Rate Parity by {attr}")
@@ -270,8 +269,7 @@ def main():
     fig_tpr = _plot_tpr_fpr(tpr_fpr_df, attr)
     st.pyplot(fig_tpr); plt.close(fig_tpr)
     with st.expander("Raw TPR / FPR values"):
-        st.dataframe(tpr_fpr_df.style.format("{:.1%}").background_gradient(cmap="Blues"),
-                     use_container_width=True)
+        st.dataframe(tpr_fpr_df, use_container_width=True)
 
     st.markdown("---")
     st.subheader("5 — Narrative Summary")

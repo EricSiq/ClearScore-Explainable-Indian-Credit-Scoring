@@ -144,9 +144,10 @@ def _show_metrics(metrics: dict, model_name: str, label_map: dict):
     keep_rows = [label_map[i] for i in sorted(label_map)] + ["macro avg", "weighted avg"]
     report_df = report_df.loc[report_df.index.isin(keep_rows)]
     report_df = report_df[["precision", "recall", "f1-score", "support"]].round(3)
-    report_df["support"] = report_df["support"].astype("Int64")
-    st.dataframe(report_df.style.background_gradient(subset=["f1-score"], cmap="Blues"),
-                 use_container_width=True)
+    # Use plain int (not nullable Int64) — pandas 3.0 nullable integers cause style crashes
+    report_df["support"] = report_df["support"].fillna(0).astype(int)
+    # Avoid style.background_gradient on pandas 3.0 — use plain dataframe display
+    st.dataframe(report_df, use_container_width=True)
 
     left, right = st.columns(2)
     with left:
@@ -373,8 +374,8 @@ def main():
             "Weighted F1": [lr_metrics["f1_weighted"],  ebm_metrics["f1_weighted"]],
             "AUC (OvR)":   [lr_metrics["auc_ovr"],     ebm_metrics["auc_ovr"]],
         }).round(4).set_index("Model")
-        st.dataframe(comparison.style.highlight_max(axis=0, color="#d4edda"),
-                     use_container_width=True)
+        # Avoid style.highlight_max — pandas 3.0 Styler API changes break this on cloud
+        st.dataframe(comparison, use_container_width=True)
         st.caption("Green cells = better model for that metric.")
 
         # Recommendation based on live results
