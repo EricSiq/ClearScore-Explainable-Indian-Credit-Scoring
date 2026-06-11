@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import tempfile
 import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
@@ -15,9 +16,12 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 
-TARGET_COL = "Approved_Flag"
-MODEL_DIR  = "app/models"
-_LABEL_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
+TARGET_COL  = "Approved_Flag"
+_LABEL_MAP  = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
+
+# Model directory: /tmp on Streamlit Cloud (read-only repo), app/models/ locally
+_TMP_MODELS = os.path.join(tempfile.gettempdir(), "creditlens_models")
+MODEL_DIR   = _TMP_MODELS if not os.access("app/models", os.W_OK) else "app/models"
 
 CLASS_COLOURS = {
     "P1": "#2ecc71",
@@ -260,16 +264,38 @@ def main():
         st.markdown("---")
 
         with st.spinner("Training Logistic Regression..."):
-            lr_model = LogisticRegression(solver="lbfgs", max_iter=1000, random_state=42)
-            lr_model.fit(X_train, y_train)
+            try:
+                lr_model = LogisticRegression(solver="lbfgs", max_iter=1000, random_state=42)
+                lr_model.fit(X_train, y_train)
+            except Exception as e:
+                st.error(f"Logistic Regression failed: {e}")
+                return
 
-        with st.spinner("Training Explainable Boosting Machine (~2-3 min)..."):
-            ebm_model = ExplainableBoostingClassifier(random_state=42)
-            ebm_model.fit(X_train, y_train)
+        with st.spinner("Training Explainable Boosting Machine (~2-3 min on full data)..."):
+            try:
+                ebm_model = ExplainableBoostingClassifier(random_state=42)
+                ebm_model.fit(X_train, y_train)
+            except MemoryError:
+                st.error(
+                    "Out of memory training EBM. "
+                    "Set the Training sample size slider to **25%** and try again. "
+                    "Streamlit Cloud free tier has 1 GB RAM — EBM on 51K rows needs ~800 MB."
+                )
+                return
+            except Exception as e:
+                st.error(f"EBM training failed: {e}")
+                return
 
-        os.makedirs(MODEL_DIR, exist_ok=True)
-        joblib.dump(lr_model,  os.path.join(MODEL_DIR, "logistic_regression.pkl"))
-        joblib.dump(ebm_model, os.path.join(MODEL_DIR, "ebm_model.pkl"))
+        try:
+            os.makedirs(MODEL_DIR, exist_ok=True)
+            joblib.dump(lr_model,  os.path.join(MODEL_DIR, "logistic_regression.pkl"))
+            joblib.dump(ebm_model, os.path.join(MODEL_DIR, "ebm_model.pkl"))
+            st.caption(f"Models persisted to `{MODEL_DIR}`")
+        except Exception as e:
+            st.warning(
+                f"Could not save models to disk ({e}). "
+                "Models are held in session memory — they will be lost on page refresh."
+            )
 
         st.session_state["lr_model"]  = lr_model
         st.session_state["ebm_model"] = ebm_model
@@ -278,7 +304,7 @@ def main():
         st.session_state["X_train"]   = X_train
         st.session_state["y_train"]   = y_train
 
-        st.success("Models trained and saved to app/models/")
+        st.success("Models trained successfully.")
 
         ebm_features = getattr(ebm_model, "feature_names_in_", None)
         if ebm_features is not None:
@@ -290,8 +316,12 @@ def main():
         st.subheader("Model Evaluation")
 
         with st.spinner("Evaluating both models on test set..."):
-            lr_metrics  = _evaluate(lr_model,  X_test, y_test, label_map)
-            ebm_metrics = _evaluate(ebm_model, X_test, y_test, label_map)
+            try:
+                lr_metrics  = _evaluate(lr_model,  X_test, y_test, label_map)
+                ebm_metrics = _evaluate(ebm_model, X_test, y_test, label_map)
+            except Exception as e:
+                st.error(f"Evaluation failed: {e}")
+                return
 
         st.session_state["model_metrics"] = {
             "lr":  {k: lr_metrics[k]  for k in ["f1_macro","f1_weighted","auc_ovr",
