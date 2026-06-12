@@ -22,13 +22,13 @@ def _label_map() -> dict:
 def _get_required_state():
     missing = []
     if "model_metrics" not in st.session_state:
-        missing.append("`model_metrics` — run Train Models first")
+        missing.append("`model_metrics` (run Train Models first)")
     if "X_test" not in st.session_state:
-        missing.append("`X_test` — run Train Models first")
+        missing.append("`X_test` (run Train Models first)")
     if "y_test" not in st.session_state:
-        missing.append("`y_test` — run Train Models first")
+        missing.append("`y_test` (run Train Models first)")
     if "external_df" not in st.session_state:
-        missing.append("`external_df` — run Upload Data first")
+        missing.append("`external_df` (run Upload Data first)")
     if missing:
         st.error("Missing required data:\n" + "\n".join(f"  - {m}" for m in missing))
         return None
@@ -51,7 +51,7 @@ def _recover_sensitive_attrs(X_test: pd.DataFrame, external_df: pd.DataFrame) ->
         sensitive.index = range(len(sensitive))
         return sensitive
     except KeyError:
-        st.warning("Index mismatch — using positional alignment.")
+        st.warning("Index mismatch. Using positional alignment.")
         return external_df[available].iloc[:len(X_test)].reset_index(drop=True)
 
 
@@ -161,13 +161,13 @@ def _generate_narrative(attr: str, sr: pd.Series, dpd: float, eod: float, label_
     elif dpd < THRESHOLD_AMBER:
         dpd_verdict = "at a level that warrants monitoring"
     else:
-        dpd_verdict = "above the action-required threshold — mitigation recommended"
+        dpd_verdict = "above the action threshold, mitigation recommended"
 
     lines = [
         f"**{attr} Fairness Summary**", "",
         f"Applicants in the **{highest_group}** group are approved at the highest rate "
         f"(**{sr.max():.1%}**), while **{lowest_group}** applicants are approved at "
-        f"**{sr.min():.1%}** — a gap of **{dpd:.1%}** (Demographic Parity Difference).", "",
+        f"**{sr.min():.1%}** (gap of **{dpd:.1%}**, Demographic Parity Difference).", "",
         f"This gap is {dpd_verdict}.", "",
         f"The Equalized Odds Difference is **{eod:.4f}**, measuring whether the model's "
         f"error rates are consistent across groups.",
@@ -175,23 +175,23 @@ def _generate_narrative(attr: str, sr: pd.Series, dpd: float, eod: float, label_
     if dpd >= THRESHOLD_AMBER:
         lines += [
             "", "**Recommended actions:**",
-            f"- Investigate whether `{attr}` is a direct or proxy feature in the model",
+            f"- Check whether `{attr}` acts as a proxy for other features in the model",
             "- Consider reweighting training samples to balance approval rates",
-            "- Review whether the approval threshold should be group-specific",
-            "- Document this finding for RBI model risk management audit trail",
+            "- Review whether the approval threshold should differ by group",
+            "- Document this finding in the RBI model risk management register",
         ]
     return "\n".join(lines)
 
 
 def main():
     st.title("Fairness Audit")
-    st.caption("CreditLens · Demographic fairness analysis · RBI MRM Guidelines (2023)")
+    st.caption("CreditLens. Demographic fairness analysis. RBI MRM Guidelines (2023).")
 
     with st.expander("Threshold reference"):
         col1, col2, col3 = st.columns(3)
-        col1.markdown("**< 0.05** — Acceptable")
-        col2.markdown("**0.05 – 0.10** — Monitor and document")
-        col3.markdown("**> 0.10** — Action required before deployment")
+        col1.markdown("**Below 0.05** - Acceptable")
+        col2.markdown("**0.05 to 0.10** - Monitor and document")
+        col3.markdown("**Above 0.10** - Action required before deployment")
         st.caption("Source: RBI Guidelines on Model Risk Management (2023).")
 
     st.markdown("---")
@@ -237,7 +237,7 @@ def main():
     pcr = per_class_rate_by_group(y_pred_r, sensitive_col, label_map)
     tpr_fpr_df = tpr_fpr_by_group(y_true_bin_r, y_pred_bin_r, sensitive_col)
 
-    st.subheader(f"1 — Headline Fairness Metrics ({attr})")
+    st.subheader(f"Fairness Metrics: {attr}")
     m1, m2 = st.columns(2)
     with m1:
         _traffic_light_metric("Demographic Parity Difference", dpd,
@@ -247,7 +247,7 @@ def main():
             help_text="max(|DTPR|, |DFPR|) across groups.")
 
     st.markdown("---")
-    st.subheader(f"2 — Approval Rate by {attr}")
+    st.subheader(f"Approval Rate by {attr}")
     fig_sr = _plot_selection_rate_bar(sr, attr, dpd)
     st.pyplot(fig_sr); plt.close(fig_sr)
     sr_df = sr.to_frame()
@@ -256,7 +256,7 @@ def main():
     st.dataframe(sr_df, use_container_width=True)
 
     st.markdown("---")
-    st.subheader(f"3 — Predicted Class Distribution by {attr}")
+    st.subheader(f"Class Distribution by {attr}")
     st.caption("Each row shows what fraction of that demographic group was predicted into each credit tier.")
     fig_hm = _plot_per_class_heatmap(pcr, attr)
     st.pyplot(fig_hm); plt.close(fig_hm)
@@ -264,7 +264,7 @@ def main():
         st.dataframe(pcr.round(3), use_container_width=True)
 
     st.markdown("---")
-    st.subheader(f"4 — Error Rate Parity by {attr}")
+    st.subheader(f"Error Rate Parity by {attr}")
     st.caption("TPR and FPR should be similar across groups for equalized odds.")
     fig_tpr = _plot_tpr_fpr(tpr_fpr_df, attr)
     st.pyplot(fig_tpr); plt.close(fig_tpr)
@@ -272,7 +272,7 @@ def main():
         st.dataframe(tpr_fpr_df, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("5 — Narrative Summary")
+    st.subheader("Summary")
     st.markdown(_generate_narrative(attr, sr, dpd, eod, label_map))
 
     # ── Action panel — shown only when thresholds are breached ────────────────
@@ -283,7 +283,7 @@ def main():
             "One or more metrics exceed the RBI MRM monitoring threshold. "
             "The following mitigation strategies are standard practice for regulated credit models."
         )
-        with st.expander("Option 1 — Post-processing: group-specific thresholds (no retraining)"):
+        with st.expander("Option 1: Post-processing with group-specific thresholds (no retraining)"):
             st.markdown(
                 "Set different approval probability thresholds per demographic group "
                 "to equalize TPR and FPR.\n\n"
@@ -293,7 +293,7 @@ def main():
                 "**Tool:** `fairlearn.postprocessing.ThresholdOptimizer` "
                 "(when scipy build issues are resolved in the environment)."
             )
-        with st.expander("Option 2 — Reweighting: upsample minority group (retraining required)"):
+        with st.expander("Option 2: Reweight training data by group (retraining required)"):
             st.markdown(
                 "Assign higher training weights to underrepresented demographic groups "
                 "so the model learns more balanced error rates.\n\n"
@@ -302,7 +302,7 @@ def main():
                 "**Implementation:** `sklearn.utils.class_weight.compute_sample_weight` "
                 "with sensitive attribute as the class label."
             )
-        with st.expander("Option 3 — Feature audit: check for proxy discrimination"):
+        with st.expander("Option 3: Feature audit for proxy discrimination"):
             st.markdown(
                 f"If `{attr}` is correlated with features the model uses directly, "
                 "removing or transforming those features may reduce bias without "
@@ -315,7 +315,7 @@ def main():
             )
 
     st.markdown("---")
-    st.subheader("6 — All Attributes Overview")
+    st.subheader("All Attributes Overview")
     st.caption("Quick scan across all sensitive attributes.")
     overview_rows = []
     for a in available_attrs:

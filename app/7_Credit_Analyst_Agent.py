@@ -18,10 +18,10 @@ MODEL_DIR  = "app/models"
 _LABEL_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
 
 TIER_DESCRIPTIONS = {
-    "P1": "Excellent creditworthiness — approve, best terms",
-    "P2": "Good creditworthiness — approve, standard terms",
-    "P3": "Marginal — conditional approval or higher rate",
-    "P4": "Poor creditworthiness — reject or secured product only",
+    "P1": "Excellent creditworthiness, approve at best terms",
+    "P2": "Good creditworthiness, approve at standard terms",
+    "P3": "Marginal, conditional approval or higher rate",
+    "P4": "Poor creditworthiness, reject or secured product only",
 }
 
 _LLAMA_BIN_CANDIDATES = ["llama-cli", "llama-cli.exe", "./llama-cli", "./llama-cli.exe"]
@@ -224,7 +224,7 @@ def _fallback_fairness(attr, dpd, eod, sr_dict):
     dpd_s = "Acceptable" if dpd < 0.05 else ("Monitor" if dpd < 0.10 else "Action Required")
     eod_s = "Acceptable" if eod < 0.05 else ("Monitor" if eod < 0.10 else "Action Required")
     return (f"**Fairness — {attr}:**\n\n{lines}\n\n"
-            f"**DPD:** {dpd:.4f} — {dpd_s}\n**EOD:** {eod:.4f} — {eod_s}")
+            f"**DPD:** {dpd:.4f} ({dpd_s})\n**EOD:** {eod:.4f} ({eod_s})")
 
 
 def _fallback_performance(metrics):
@@ -352,32 +352,32 @@ def _dispatch(intent, args, model, model_key, X, y, label_map, model_path, metri
 
 def main():
     st.title("Credit Analyst Agent")
-    st.caption("Ask questions in plain English. Responses are grounded in SHAP feature attributions from the trained model.")
+    st.caption("Ask questions about the model. Answers are backed by SHAP feature values from the trained model.")
 
     # ── Example conversation shown on first load ──────────────────────────────
-    with st.expander("See example conversation — what this agent can do", expanded=True):
+    with st.expander("Example conversation", expanded=True):
         st.markdown(
             "**User:** explain applicant 42\n\n"
             "**Agent:** Applicant 42 was classified as **P4** (poor creditworthiness) "
             "with 87% confidence. The three strongest negative factors were:\n"
-            "- `num_times_delinquent`: 4 occurrences — the single strongest predictor of credit risk\n"
-            "- `CC_utilization`: 91% — sustained high utilization signals financial stress\n"
-            "- `Tot_Missed_Pmnt`: 6 — persistent payment failures across trade lines\n\n"
+            "- `num_times_delinquent`: 4 occurrences (the single strongest predictor of credit risk)\n"
+            "- `CC_utilization`: 91% (sustained high utilization signals financial stress)\n"
+            "- `Tot_Missed_Pmnt`: 6 (persistent payment failures across trade lines)\n\n"
             "**RECOMMENDATION:** To improve from P4 to P3, the applicant needs zero new "
             "delinquencies for 12 months and CC utilization reduced below 60%.\n\n"
             "---\n\n"
             "**User:** fairness for GENDER\n\n"
-            "**Agent:** Approval rates — M: 76.3%, F: 77.3%. "
-            "Demographic Parity Difference: 0.0105 (**Acceptable** — below RBI threshold of 0.05). "
+            "**Agent:** Approval rates: M 76.3%, F 77.3%. "
+            "Demographic Parity Difference: 0.0105 (Acceptable, below RBI threshold of 0.05). "
             "The model does not disadvantage female applicants on approval rate. "
-            "Equalized Odds Difference: 0.0500 (**Monitor**) — female applicants have a slightly "
+            "Equalized Odds Difference: 0.0500 (Monitor). Female applicants have a slightly "
             "higher false positive rate (16.0% vs 10.9%). This means more non-creditworthy female "
             "applicants are incorrectly approved. Warrants monitoring but no immediate mitigation required.\n\n"
             "---\n\n"
             "**User:** what features drive approvals?\n\n"
             "**Agent:** The top predictors (by mean |SHAP| across all applicants) are: "
             "`num_times_delinquent`, `CC_utilization`, `Tot_Missed_Pmnt`, `time_since_recent_deliquency`, "
-            "`pct_active_tl`. Delinquency-related features dominate — consistent with "
+            "`pct_active_tl`. Delinquency features dominate, consistent with "
             "standard credit risk theory. `CC_utilization` captures current financial stress. "
             "`pct_active_tl` (fraction of trade lines still active) reflects credit portfolio health."
         )
@@ -485,7 +485,7 @@ def main():
 
         intent, args = _classify_intent(query)
         with st.chat_message("assistant"):
-            with st.spinner("Analysing..."):
+            with st.spinner("Working on it..."):
                 response = _dispatch(intent, args, model, model_key, X, y, label_map,
                                      model_path, metrics, external_df, X_test, y_test)
             st.markdown(response)

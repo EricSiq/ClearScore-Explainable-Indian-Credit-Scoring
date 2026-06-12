@@ -19,12 +19,12 @@ _LABEL_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
 TIER_DESCRIPTIONS = {
     "P1": "Excellent creditworthiness",
     "P2": "Good creditworthiness",
-    "P3": "Marginal — conditional approval",
-    "P4": "Poor creditworthiness — reject",
+    "P3": "Marginal, conditional approval",
+    "P4": "Poor creditworthiness, reject",
 }
 TIER_ACTIONS = {
-    "P1": "Approve — best rate",
-    "P2": "Approve — standard rate",
+    "P1": "Approve at best rate",
+    "P2": "Approve at standard rate",
     "P3": "Conditional / higher rate",
     "P4": "Reject / secured only",
 }
@@ -204,7 +204,7 @@ def _build_pdf(bm_lr, bm_ebm, lr_meta, ebm_meta, avg_loan, p4_rate, p3_rate) -> 
 
 def main():
     st.title("Business Impact Summary")
-    st.caption("CreditLens · Model performance in credit risk business language")
+    st.caption("CreditLens. Model performance in credit risk business language.")
 
     metrics = _get_metrics()
     if metrics is None:
@@ -257,11 +257,11 @@ def main():
     if ebm_wins >= 4:
         st.success(
             f"**Recommended model: EBM.** "
-            f"Outperforms Logistic Regression on {ebm_wins}/5 business metrics — "
+            f"Outperforms Logistic Regression on {ebm_wins}/5 business metrics: "
             f"accuracy ({bm_ebm['accuracy']:.1%} vs {bm_lr['accuracy']:.1%}), "
             f"NPA avoided ({_fmt_cr(bm_ebm['npa_total'])} vs {_fmt_cr(bm_lr['npa_total'])}), "
             f"and AUC ({ebm_meta['auc_ovr']:.3f} vs {lr_meta['auc_ovr']:.3f}). "
-            f"EBM is also preferred for regulatory compliance — its shape functions provide "
+            f"EBM is also the better choice for regulatory compliance. Its shape functions provide "
             f"exact, auditable explanations that satisfy RBI MRM documentation requirements "
             f"without relying on post-hoc SHAP approximations."
         )
@@ -271,7 +271,7 @@ def main():
             f"EBM won {ebm_wins}/5 metrics. Consider full 100% training set for a definitive comparison."
         )
 
-    st.subheader("1 — EBM Model: Headline Outcomes")
+    st.subheader("EBM Model: Headline Outcomes")
     st.caption(f"Based on {n_test:,} test-set applicants (20% holdout, stratified)")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Correctly Classified", f"{bm_ebm['total_correct']:,}", f"{bm_ebm['accuracy']:.1%} accuracy")
@@ -281,7 +281,7 @@ def main():
               delta_color="inverse")
 
     st.markdown("---")
-    st.subheader("2 — Risk Tier Distribution")
+    st.subheader("Risk Tier Distribution")
     left, right = st.columns(2)
     with left:
         fig_d_lr = _plot_tier_donut(bm_lr, "Logistic Regression")
@@ -300,17 +300,17 @@ def main():
     st.dataframe(pd.DataFrame(tier_rows).set_index("Tier"), use_container_width=True)
 
     st.markdown("---")
-    st.subheader("3 — NPA Impact: LR vs EBM")
+    st.subheader("NPA Impact: LR vs EBM")
     fig_npa = _plot_npa_bar(bm_lr, bm_ebm)
     st.pyplot(fig_npa); plt.close(fig_npa)
 
     st.markdown("---")
-    st.subheader("4 — Correct Classifications by Tier")
+    st.subheader("Correct Classifications by Tier")
     fig_acc = _plot_correct_by_tier(bm_lr, bm_ebm)
     st.pyplot(fig_acc); plt.close(fig_acc)
 
     st.markdown("---")
-    st.subheader("5 — Full Model Comparison")
+    st.subheader("Full Model Comparison")
     comp_rows = [
         {"Metric": "Macro F1",              "LR": f"{lr_meta['f1_macro']:.3f}",    "EBM": f"{ebm_meta['f1_macro']:.3f}"},
         {"Metric": "Weighted F1",           "LR": f"{lr_meta['f1_weighted']:.3f}", "EBM": f"{ebm_meta['f1_weighted']:.3f}"},
@@ -326,7 +326,7 @@ def main():
     st.dataframe(pd.DataFrame(comp_rows).set_index("Metric"), use_container_width=True)
 
     st.markdown("---")
-    st.subheader("6 — Export PDF Report")
+    st.subheader("Export PDF Report")
     if st.button("Generate PDF Business Summary"):
         with st.spinner("Building PDF..."):
             try:
@@ -337,7 +337,7 @@ def main():
             except Exception as e:
                 st.error(f"PDF generation failed: {e}")
 
-    st.info("Pipeline complete — all 8 pages are active.")
+    st.info("Pipeline complete. All 8 pages are active.")
 
 
 main()

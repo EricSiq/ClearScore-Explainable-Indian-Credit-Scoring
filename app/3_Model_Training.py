@@ -162,7 +162,7 @@ def _show_metrics(metrics: dict, model_name: str, label_map: dict):
 
 def main():
     st.title("Train Models")
-    st.caption("CreditLens · Explainable AI Credit Scoring")
+    st.caption("CreditLens. Explainable AI Credit Scoring.")
 
     if "processed_df" not in st.session_state:
         st.error(
@@ -205,7 +205,7 @@ def main():
                 language="python"
             )
         with c2:
-            st.markdown("**EBM — Explainable Boosting Machine (primary)**")
+            st.markdown("**EBM: Explainable Boosting Machine (primary)**")
             st.code(
                 "# InterpretML ExplainableBoostingClassifier\n"
                 "random_state=42\n"
@@ -278,7 +278,7 @@ def main():
         s2.metric("Test samples",  f"{len(X_test):,}")
         fig_dist = _plot_class_dist_comparison(y_train, y_test, label_map)
         st.pyplot(fig_dist); plt.close(fig_dist)
-        st.caption("Bar heights should be nearly identical — confirming stratification.")
+        st.caption("Bar heights should be nearly identical, confirming stratification.")
         st.markdown("---")
 
         with st.spinner("Training Logistic Regression..."):
@@ -305,7 +305,7 @@ def main():
                 st.error(
                     "Out of memory training EBM. "
                     "Set the Training sample size slider to **25%** and try again. "
-                    "Streamlit Cloud free tier has 1 GB RAM — EBM on 51K rows needs ~800 MB."
+                    "Streamlit Cloud free tier has 1 GB RAM. EBM on 51K rows needs ~800 MB."
                 )
                 return
             except Exception as e:
@@ -320,7 +320,7 @@ def main():
         except Exception as e:
             st.warning(
                 f"Could not save models to disk ({e}). "
-                "Models are held in session memory — they will be lost on page refresh."
+                "Models are held in session memory and will be lost on page refresh."
             )
 
         st.session_state["lr_model"]  = lr_model
@@ -389,14 +389,14 @@ def main():
                 f"Outperforms Logistic Regression on both Macro F1 "
                 f"({ebm_f1:.3f} vs {lr_f1:.3f}) and AUC "
                 f"({ebm_auc:.3f} vs {lr_auc:.3f}). "
-                "EBM is also the correct choice for regulatory compliance — "
+                "EBM is also the better choice for regulatory compliance. "
                 "its shape functions provide exact, auditable explanations that satisfy "
                 "RBI MRM documentation requirements without post-hoc approximation."
             )
         elif lr_f1 >= ebm_f1:
             st.info(
                 "Logistic Regression matches or exceeds EBM on this sample size. "
-                "Try 100% training data for a more representative comparison — "
+                "Try 100% training data for a more representative comparison. "
                 "EBM typically outperforms LR on the full 51K dataset."
             )
 

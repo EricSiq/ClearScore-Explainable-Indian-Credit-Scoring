@@ -28,7 +28,7 @@ def find_common_key(a: pd.DataFrame, b: pd.DataFrame):
 def merge_datasets(df_int: pd.DataFrame, df_ext: pd.DataFrame) -> pd.DataFrame:
     key_a, key_b = find_common_key(df_int, df_ext)
     if key_a and key_b:
-        st.success(f"Merge key detected — Internal: `{key_a}` / External: `{key_b}`")
+        st.success(f"Merge key detected. Internal: `{key_a}`, External: `{key_b}`")
         df = pd.merge(df_int, df_ext, left_on=key_a, right_on=key_b, how="inner", suffixes=("_int", "_ext"))
         if key_a != key_b and key_b in df.columns:
             df.drop(columns=[key_b], inplace=True)
@@ -36,7 +36,7 @@ def merge_datasets(df_int: pd.DataFrame, df_ext: pd.DataFrame) -> pd.DataFrame:
         st.info(f"Merged shape: {df.shape[0]:,} rows x {df.shape[1]} columns")
         return df
     if df_int.shape[0] == df_ext.shape[0]:
-        st.warning("No common ID column found — merging by index (row counts match).")
+        st.warning("No common ID column found. Merging by index since row counts match.")
         df = pd.concat([df_int.reset_index(drop=True), df_ext.reset_index(drop=True)], axis=1)
         df.reset_index(drop=True, inplace=True)
         return df
@@ -114,26 +114,26 @@ def main():
     # Pipeline description
     with st.expander("What this step does"):
         st.markdown(
-            "**Merge** — inner join on shared key `PROSPECTID` "
+            "**Merge**: inner join on shared key `PROSPECTID` "
             "(51,336 matching rows across both datasets)\n\n"
-            "**Impute** — numeric columns: median strategy; "
+            "**Impute**: numeric columns use median strategy; "
             "categorical columns: most-frequent strategy\n\n"
-            "**Encode** — OneHotEncoder on 5 categorical columns "
+            "**Encode**: OneHotEncoder on 5 categorical columns "
             "(MARITALSTATUS, EDUCATION, GENDER, last_prod_enq2, first_prod_enq2) "
             "producing 23 binary columns\n\n"
-            "**Scale** — StandardScaler on all 80 numeric columns "
+            "**Scale**: StandardScaler on all 80 numeric columns "
             "(zero mean, unit variance)\n\n"
-            "**Label encode target** — Approved_Flag: P1→0, P2→1, P3→2, P4→3"
+            "**Label encode target**: Approved_Flag maps P1 to 0, P2 to 1, P3 to 2, P4 to 3"
         )
 
-    st.subheader("Step 1 — Merge Datasets")
+    st.subheader("Step 1: Merge Datasets")
     with st.spinner("Merging datasets..."):
         df_merged = merge_datasets(df_int, df_ext)
 
     with st.expander("Preview merged data (first 5 rows)"):
         st.dataframe(df_merged.head())
 
-    st.subheader("Step 2 — Encode, Impute & Scale")
+    st.subheader("Step 2: Encode, Impute & Scale")
 
     # In demo mode, auto-run preprocessing without requiring button click
     auto_run = demo_mode and "processed_df" not in st.session_state

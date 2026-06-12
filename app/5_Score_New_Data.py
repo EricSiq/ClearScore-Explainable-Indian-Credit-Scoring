@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import tempfile
 import shap
 import matplotlib.pyplot as plt
 from sklearn.inspection import PartialDependenceDisplay
@@ -20,14 +21,16 @@ from app.components.pdp_plotter  import plot_pdp
 
 TARGET_COL  = "Approved_Flag"
 MODEL_DIR   = "app/models"
-REPORTS_DIR = "reports"
+# On Streamlit Cloud the repo is read-only; write reports to /tmp instead
+_TMP_DIR    = tempfile.gettempdir()
+REPORTS_DIR = "reports" if os.access(".", os.W_OK) else os.path.join(_TMP_DIR, "creditlens_reports")
 _LABEL_MAP  = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
 
 TIER_DESCRIPTIONS = {
-    "P1": "Excellent — approve, best terms",
-    "P2": "Good — approve, standard terms",
-    "P3": "Marginal — conditional approval or higher rate",
-    "P4": "Poor — reject or secured product only",
+    "P1": "Excellent, approve at best terms",
+    "P2": "Good, approve at standard terms",
+    "P3": "Marginal, conditional approval or higher rate",
+    "P4": "Poor creditworthiness, reject or secured product only",
 }
 
 
@@ -166,10 +169,10 @@ def _shap_top_features(shap_values, idx: int, n: int = 10) -> list:
 
 def main():
     st.title("Score New Applicants")
-    st.caption("CreditLens · Explainable AI Credit Scoring")
+    st.caption("CreditLens. Explainable AI Credit Scoring.")
     label_map = _label_map()
 
-    st.subheader("1 — Load Unseen Dataset")
+    st.subheader("Load Unseen Dataset")
     unseen_df = st.session_state.get("unseen_df")
     if unseen_df is not None:
         st.success("Using previously uploaded unseen dataset.")
@@ -192,7 +195,7 @@ def main():
         st.warning("Upload an unseen dataset to continue.")
         return
 
-    st.subheader("2 — Select Model")
+    st.subheader("Select Model")
     lr  = _load_model("logistic_regression.pkl", "lr_model")
     ebm = _load_model("ebm_model.pkl",           "ebm_model")
     model_options = {}
@@ -208,7 +211,7 @@ def main():
     model     = model_options[model_key]
     st.markdown("---")
 
-    st.subheader("3 — Predict Credit Tiers")
+    st.subheader("Predict Credit Tiers")
     if st.button("Run Prediction"):
         with st.spinner("Transforming unseen data..."):
             try:
@@ -241,7 +244,7 @@ def main():
                            file_name="scored_output.csv", mime="text/csv")
 
     st.markdown("---")
-    st.subheader("4 — Explain Individual Applicant")
+    st.subheader("Explain Individual Applicant")
 
     if "prediction_result" not in st.session_state:
         st.info("Run prediction above first.")

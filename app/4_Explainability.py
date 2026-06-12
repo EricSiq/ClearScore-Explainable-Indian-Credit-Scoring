@@ -26,11 +26,11 @@ def _get_shap_values(model, X, model_name):
 
 
 def main():
-    st.title("Explainability — SHAP, LIME, PDP")
+    st.title("Explainability: SHAP, LIME, PDP")
     st.caption(
-        "Three complementary techniques for understanding the model's decisions: "
-        "SHAP (global and local feature attribution), LIME (local linear approximation), "
-        "and PDP (feature-response relationship)."
+        "Three techniques for understanding model decisions: "
+        "SHAP for feature attribution, LIME for local approximation, "
+        "and PDP for feature-response relationships."
     )
 
     X, y = get_X_y()
@@ -68,13 +68,13 @@ def main():
     st.markdown("---")
 
     # ── Section 1: Global SHAP — auto-computed on load ────────────────────────
-    st.subheader("1 — Global Feature Importance (SHAP)")
+    st.subheader("1. Global Feature Importance (SHAP)")
 
     with st.expander("What this shows"):
         st.markdown(
             "**Mean absolute SHAP value per feature** across all training applicants. "
             "A high value for `num_times_delinquent` means delinquency history is the "
-            "strongest predictor of credit tier — consistent with standard credit risk theory. "
+            "strongest predictor of credit tier, consistent with standard credit risk theory. "
             "For EBM, SHAP values equal the model's own shape function values exactly. "
             "This is not a post-hoc approximation."
         )
@@ -95,12 +95,12 @@ def main():
     st.markdown("---")
 
     # ── Section 2: Local SHAP + LIME ─────────────────────────────────────────
-    st.subheader("2 — Local Explanations (per applicant)")
+    st.subheader("2. Local Explanations (per applicant)")
 
-    with st.expander("SHAP waterfall vs LIME — when to use which"):
+    with st.expander("SHAP waterfall vs LIME: when to use which"):
         st.markdown(
             "**SHAP waterfall**: Decomposes one prediction into additive feature contributions. "
-            "For EBM this is exact — the bar length equals the shape function output for that "
+            "For EBM this is exact. The bar length equals the shape function output for that "
             "feature value. Use this when you need an auditable, defensible explanation.\n\n"
             "**LIME**: Fits a local linear model around the applicant's neighbourhood in feature "
             "space. Less exact than SHAP for EBM, but produces a simpler linear equation "
@@ -126,14 +126,14 @@ def main():
     st.markdown("---")
 
     # ── Section 3: PDP ───────────────────────────────────────────────────────
-    st.subheader("3 — Partial Dependence Plot")
+    st.subheader("3. Partial Dependence Plot")
 
     with st.expander("What a PDP shows"):
         st.markdown(
             "A PDP answers: *holding all other features fixed, how does changing this one "
             "feature from its minimum to maximum value affect the predicted credit tier?* "
             "Useful for communicating model behaviour to non-technical audiences. "
-            "Try `CC_utilization` — the PDP will show that predicted creditworthiness "
+            "Try `CC_utilization`. The PDP will show that predicted creditworthiness "
             "deteriorates sharply as utilization exceeds ~60%."
         )
 

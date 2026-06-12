@@ -47,7 +47,7 @@ def main():
         "External CIBIL Dataset (.xlsx or .csv)", type=["xlsx", "csv"]
     )
     unseen_file = st.file_uploader(
-        "Unseen Dataset for scoring (.xlsx or .csv) — optional",
+        "Unseen Dataset for scoring (.xlsx or .csv) (optional)",
         type=["xlsx", "csv"],
     )
 
