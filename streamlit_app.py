@@ -19,8 +19,9 @@ with st.sidebar:
 
 navigation = st.navigation(
     {
-        "": [st.Page("app/Home.py", title="Overview", default=True)],
+        "": [st.Page("app/Dashboard.py", title="Dashboard", default=True)],
         "Workflow": [
+            st.Page("app/Home.py", title="Overview"),
             st.Page("app/1_Data_Upload.py", title="Data intake"),
             st.Page("app/2_Preprocessing.py", title="Prepare data"),
             st.Page("app/3_Model_Training.py", title="Train and validate"),
