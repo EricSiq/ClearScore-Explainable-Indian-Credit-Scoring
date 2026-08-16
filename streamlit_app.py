@@ -18,17 +18,17 @@ st.set_page_config(
 with st.sidebar:
     with st.expander("Key concepts"):
         st.markdown(
-            "**EBM** — Glass-box GA2M model. Shape functions = the model. "
+            "**EBM** - Glass-box GA2M model. Shape functions are the model. "
             "Explanations are exact, not SHAP approximations.\n\n"
-            "**SHAP** — Shapley value attribution. For EBM: SHAP = shape function output. "
+            "**SHAP** - Shapley value attribution. For EBM: SHAP equals shape function output. "
             "Global = mean |SHAP|. Local = one prediction decomposed.\n\n"
-            "**DPD** — Demographic Parity Difference. "
-            "max − min approval rate across groups. RBI limit: < 0.05.\n\n"
-            "**EOD** — Equalized Odds Difference. "
-            "max(|ΔTPR|, |ΔFPR|). RBI limit: < 0.05.\n\n"
-            "**NPA** — Non-Performing Asset. Loan in default (> 90 days). "
+            "**DPD** - Demographic Parity Difference. "
+            "max minus min approval rate across groups. RBI limit: below 0.05.\n\n"
+            "**EOD** - Equalized Odds Difference. "
+            "max(|delta TPR|, |delta FPR|). RBI limit: below 0.05.\n\n"
+            "**NPA** - Non-Performing Asset. Loan in default (90+ days). "
             "Core risk metric for all Indian banks.\n\n"
-            "**Tiers** — P1 Excellent · P2 Good · P3 Marginal · P4 Reject"
+            "**Tiers** - P1 Excellent, P2 Good, P3 Marginal, P4 Reject"
         )
 
 pg = st.navigation(
