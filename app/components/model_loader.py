@@ -15,7 +15,7 @@ import joblib
 import streamlit as st
 
 # Mirror the same directory logic used when saving models in Page 3
-_TMP_MODELS = os.path.join(tempfile.gettempdir(), "creditlens_models")
+_TMP_MODELS = os.path.join(tempfile.gettempdir(), "xclearscore_models")
 MODEL_DIR   = _TMP_MODELS if not os.access("app/models", os.W_OK) else "app/models"
 
 

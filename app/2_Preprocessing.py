@@ -9,7 +9,8 @@ from sklearn.compose import ColumnTransformer
 TARGET_COL = "Approved_Flag"
 TARGET_MAP = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 DROP_COLS  = ["PROSPECTID"]
-CAT_COLS   = ["MARITALSTATUS", "EDUCATION", "GENDER", "last_prod_enq2", "first_prod_enq2"]
+CAT_COLS   = ["last_prod_enq2", "first_prod_enq2"]
+SENSITIVE_COLS = ["MARITALSTATUS", "EDUCATION", "GENDER"]
 
 
 def find_common_key(a: pd.DataFrame, b: pd.DataFrame):
@@ -68,7 +69,9 @@ def run_preprocessing(df: pd.DataFrame):
         st.error(f"Target column `{TARGET_COL}` not found. Ensure the External CIBIL dataset contains this column.")
         st.stop()
 
-    cols_to_drop = [c for c in DROP_COLS if c in df.columns] + [TARGET_COL]
+    # Sensitive attributes are retained in external_df for monitoring, but excluded
+    # from the deployed model features in this prototype.
+    cols_to_drop = [c for c in DROP_COLS + SENSITIVE_COLS if c in df.columns] + [TARGET_COL]
     X_raw = df.drop(columns=cols_to_drop)
     y_raw = df[TARGET_COL].copy()
 
@@ -118,9 +121,8 @@ def main():
             "(51,336 matching rows across both datasets)\n\n"
             "**Impute**: numeric columns use median strategy; "
             "categorical columns: most-frequent strategy\n\n"
-            "**Encode**: OneHotEncoder on 5 categorical columns "
-            "(MARITALSTATUS, EDUCATION, GENDER, last_prod_enq2, first_prod_enq2) "
-            "producing 23 binary columns\n\n"
+            "**Encode**: OneHotEncoder on the product-enquiry categorical columns. "
+            "GENDER, EDUCATION, and MARITALSTATUS are excluded from model features and retained only for monitoring.\n\n"
             "**Scale**: StandardScaler on all 80 numeric columns "
             "(zero mean, unit variance)\n\n"
             "**Label encode target**: Approved_Flag maps P1 to 0, P2 to 1, P3 to 2, P4 to 3"

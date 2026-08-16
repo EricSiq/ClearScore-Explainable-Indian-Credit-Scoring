@@ -1,159 +1,71 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
-import os
-import shap
+"""EBM-native, SHAP, and LIME explanations with explicit compute boundaries."""
+
 import matplotlib.pyplot as plt
+import numpy as np
+import streamlit as st
 
-from app.components.model_loader import load_model as _load_model_from_disk
-from app.components.utils        import get_label_map, get_X_y
-from app.components.shap_plotter import get_shap_values, shap_global_plot, shap_local_waterfall
-from app.components.lime_plotter import lime_local_explanation
-from app.components.pdp_plotter  import plot_pdp
-
-TARGET_COL = "Approved_Flag"
-MODEL_DIR  = "app/models"
-_LABEL_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
+from app.components.model_loader import load_model
+from app.components.utils import get_X_y, get_label_map
+from app.components.xai import lime_explanation, shap_values
 
 
-def _load_model(filename, session_key):
-    return _load_model_from_disk(filename, session_key)
-
-
-def _get_shap_values(model, X, model_name):
-    return get_shap_values(model, X, f"train_{model_name}")
+def _ebm_global(ebm):
+    explanation = ebm.explain_global()
+    data = explanation.data()
+    names, scores = data.get("names", []), data.get("scores", [])
+    order = np.argsort(scores)[::-1][:15]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(np.array(names)[order][::-1], np.array(scores)[order][::-1], color="#0f766e")
+    ax.set_xlabel("EBM importance")
+    ax.set_title("EBM global feature importance")
+    fig.tight_layout()
+    return fig
 
 
 def main():
-    st.title("Explainability: SHAP, LIME, PDP")
-    st.caption(
-        "Three techniques for understanding model decisions: "
-        "SHAP for feature attribution, LIME for local approximation, "
-        "and PDP for feature-response relationships."
-    )
-
-    X, y = get_X_y()
-    if X is None:
-        st.error(
-            "No preprocessed data found. "
-            "Run the pipeline: Home > Launch Demo (or Upload Data) > Preprocess > Train Models."
-        )
+    st.title("Explainability workbench")
+    st.caption("EBM shape-function evidence, SHAP attribution, and LIME local approximation.")
+    X, _ = get_X_y()
+    ebm = load_model("ebm_model.pkl", "ebm_model")
+    if X is None or ebm is None:
+        st.error("Prepare data and train the EBM before opening the explainability workbench.")
         return
+    labels = get_label_map()
+    st.subheader("1. Inherent EBM explanation")
+    st.write("EBM is the primary glass-box model. Its learned additive shape functions are part of the model, not a post-hoc approximation.")
+    fig = _ebm_global(ebm)
+    st.pyplot(fig); plt.close(fig)
 
-    lr  = _load_model("logistic_regression.pkl", "lr_model")
-    ebm = _load_model("ebm_model.pkl", "ebm_model")
+    row_index = int(st.number_input("Applicant row", 0, len(X) - 1, 0, 1))
+    row = X.iloc[[row_index]]
+    predicted = int(ebm.predict(row)[0])
+    probabilities = ebm.predict_proba(row)[0]
+    st.metric("EBM predicted tier", labels[predicted])
+    st.bar_chart({labels[int(class_id)]: float(probabilities[position]) for position, class_id in enumerate(ebm.classes_)})
 
-    model_options = {}
-    if lr:
-        model_options["EBM (recommended)"] = ("EBM", ebm) if ebm else None
-        model_options["Logistic Regression"] = ("LR", lr)
-    if ebm:
-        model_options = {}
-        model_options["EBM (recommended)"] = ("EBM", ebm)
-        if lr:
-            model_options["Logistic Regression"] = ("LR", lr)
+    st.subheader("2. SHAP attribution")
+    st.caption("SHAP runs only when requested. Community Cloud uses 50 rows and 20 background rows, cached for the session; use local full validation for publication-grade analysis.")
+    if st.button("Compute bounded SHAP sample"):
+        try:
+            sample, values = shap_values(ebm, X, "ebm")
+            import shap
+            shap.summary_plot(values, sample, max_display=15, show=False)
+            st.pyplot(plt.gcf(), clear_figure=True)
+            plt.close("all")
+        except Exception as error:
+            st.error(f"SHAP computation failed: {error}")
 
-    if not model_options:
-        st.error("No trained models found. Run Train Models first.")
-        return
-
-    model_display = st.selectbox("Model", list(model_options.keys()))
-    model_key, model = model_options[model_display]
-
-    if model is None:
-        st.error("Selected model not available. Run Train Models first.")
-        return
-
-    st.markdown("---")
-
-    # ── Section 1: Global SHAP — auto-computed on load ────────────────────────
-    st.subheader("1. Global Feature Importance (SHAP)")
-
-    with st.expander("What this shows"):
-        st.markdown(
-            "**Mean absolute SHAP value per feature** across all training applicants. "
-            "A high value for `num_times_delinquent` means delinquency history is the "
-            "strongest predictor of credit tier, consistent with standard credit risk theory. "
-            "For EBM, SHAP values equal the model's own shape function values exactly. "
-            "This is not a post-hoc approximation."
-        )
-
-    max_display = st.slider("Features to display", min_value=5, max_value=30, value=15)
-
-    # Auto-compute if SHAP values are already cached from training (fast path)
-    cache_key = f"shap_values_train_{model_key}"
-    if cache_key in st.session_state:
-        st.caption("SHAP values loaded from cache (computed during training).")
-        shap_global_plot(model, X, f"train_{model_key}", max_display)
-    else:
-        st.caption("Click below to compute SHAP values for the full training set (~30–60 seconds).")
-        if st.button("Compute Global SHAP Summary"):
-            with st.spinner("Computing SHAP values and caching..."):
-                shap_global_plot(model, X, f"train_{model_key}", max_display)
-
-    st.markdown("---")
-
-    # ── Section 2: Local SHAP + LIME ─────────────────────────────────────────
-    st.subheader("2. Local Explanations (per applicant)")
-
-    with st.expander("SHAP waterfall vs LIME: when to use which"):
-        st.markdown(
-            "**SHAP waterfall**: Decomposes one prediction into additive feature contributions. "
-            "For EBM this is exact. The bar length equals the shape function output for that "
-            "feature value. Use this when you need an auditable, defensible explanation.\n\n"
-            "**LIME**: Fits a local linear model around the applicant's neighbourhood in feature "
-            "space. Less exact than SHAP for EBM, but produces a simpler linear equation "
-            "that some audiences find more intuitive. Use this as a cross-check."
-        )
-
-    idx = st.number_input(
-        "Applicant row index",
-        min_value=0, max_value=max(0, len(X) - 1), value=0, step=1,
-        help="Select any row from the training set to explain"
-    )
-
-    col_shap, col_lime = st.columns(2)
-    with col_shap:
-        if st.button("Show SHAP Waterfall", use_container_width=True):
-            with st.spinner("Computing SHAP waterfall..."):
-                shap_local_waterfall(model, X, f"train_{model_key}", int(idx))
-    with col_lime:
-        if st.button("Show LIME Explanation", use_container_width=True):
-            with st.spinner("Computing LIME explanation (~5s)..."):
-                lime_local_explanation(model, X, int(idx), get_label_map(), num_features=12)
-
-    st.markdown("---")
-
-    # ── Section 3: PDP ───────────────────────────────────────────────────────
-    st.subheader("3. Partial Dependence Plot")
-
-    with st.expander("What a PDP shows"):
-        st.markdown(
-            "A PDP answers: *holding all other features fixed, how does changing this one "
-            "feature from its minimum to maximum value affect the predicted credit tier?* "
-            "Useful for communicating model behaviour to non-technical audiences. "
-            "Try `CC_utilization`. The PDP will show that predicted creditworthiness "
-            "deteriorates sharply as utilization exceeds ~60%."
-        )
-
-    # Pre-select the most important numeric features for convenience
-    numeric_features = [c for c in X.columns if "_" not in c or c.startswith(("Tot", "pct", "num", "CC", "PL", "Age"))]
-    all_features = X.columns.tolist()
-
-    feature_for_pdp = st.selectbox(
-        "Feature",
-        all_features,
-        index=all_features.index("CC_utilization") if "CC_utilization" in all_features else 0,
-        help="CC_utilization and num_times_delinquent typically show the clearest relationships"
-    )
-
-    if st.button("Show PDP", use_container_width=True):
-        with st.spinner("Computing partial dependence..."):
-            plot_pdp(model, X, feature_for_pdp)
-
-    st.markdown("---")
-    st.info("Proceed to Score New Applicants or Fairness Audit.")
+    st.subheader("3. LIME local approximation")
+    st.caption("LIME approximates the EBM decision around the selected applicant using a capped 1,000-row background sample.")
+    if st.button("Compute LIME explanation"):
+        try:
+            explanation = lime_explanation(ebm, X, row_index, [labels[i] for i in sorted(labels)])
+            class_position = list(ebm.classes_).index(predicted)
+            pairs = explanation.as_list(label=class_position)
+            st.dataframe({"local condition": [name for name, _ in pairs], "weight": [weight for _, weight in pairs]}, use_container_width=True)
+        except Exception as error:
+            st.error(f"LIME computation failed: {error}")
+    st.warning("Use all three views together: EBM provides the model-native explanation; SHAP and LIME are complementary attribution/approximation methods. None of them is a customer-facing adverse-action notice without governed reason-code mapping.")
 
 
 main()
